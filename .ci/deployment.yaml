@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: vcl
+spec:
+  selector:
+    matchLabels:
+      app: vcl
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: vcl
+        tier: backend
+    spec:
+      containers:
+        - name: backend
+          image: k3env/vcl-backend:latest
+          resources:
+            limits:
+              memory: '128Mi'
+              cpu: '500m'
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: vcl-back-env
