@@ -1,4 +1,4 @@
-Deployment #{{build.number}} `k3env/vcl-backend-v2` finished
+Deployment #{{build.number}} `k3env/sample-auth` finished
 
 {{#success build.status}}
 🟢 succeeded
@@ -6,4 +6,4 @@ Deployment #{{build.number}} `k3env/vcl-backend-v2` finished
 🔴 failed
 {{/success}}
 
-Deployment available here: https://api.vcl.k3env.site
+Deployment available here: https://auth.k3env.site/api

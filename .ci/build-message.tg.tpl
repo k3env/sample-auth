@@ -1,4 +1,4 @@
-Build #{{build.number}} `k3env/vcl-backend-v2` finished
+Build #{{build.number}} `k3env/sample-auth` finished
 
 Message: `{{commit.message}}`
 
