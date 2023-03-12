@@ -2,7 +2,6 @@ import fastify, { RouteShorthandOptions } from 'fastify';
 import fastifyCors from '@fastify/cors';
 import * as dotenv from 'dotenv';
 import { fastifyMongodb } from '@fastify/mongodb';
-// import fastifyRedis from '@fastify/redis';
 import { User } from './models/User.model';
 import { decodeToken, generateToken } from './helpers/jwt';
 import { comparePasswords, hashPassword } from './helpers/passwords';
