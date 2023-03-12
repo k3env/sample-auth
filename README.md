@@ -1,6 +1,7 @@
 # Sample JWT auth
 
 [![Build Status](https://drone.k3env.site/api/badges/k3env/sample-auth/status.svg)](https://drone.k3env.site/k3env/sample-auth)
+[![Version](https://img.shields.io/docker/v/k3env/sample-auth?style=flat)](https://hub.docker.com/r/k3env/sample-auth)
 
 Sample JWT auth service
 
