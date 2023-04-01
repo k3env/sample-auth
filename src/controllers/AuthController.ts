@@ -1,21 +1,210 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyTypeProviderDefault } from 'fastify';
+import { Server, IncomingMessage, ServerResponse } from 'http';
+import { JWT } from '../helpers/jwt';
+import { hashPassword, comparePasswords } from '../helpers/passwords';
+import { Session } from '../models/Session.model';
 import { User } from '../models/User.model';
+import * as crypto from 'crypto';
+import { ObjectId } from '@fastify/mongodb';
+import { exportJWK, KeyLike } from 'jose';
 
-export class AuthController {
-  protected app: FastifyInstance;
-  constructor(app: FastifyInstance) {
-    this.app = app;
-  }
+export type AuthControllerOpts = {
+  publicKey: KeyLike;
+  privateKey: KeyLike;
+  enableRegistration: boolean;
+  jwtDuration: number;
+  sessionDuration: number;
+};
 
-  public async register(req: FastifyRequest, res: FastifyReply): Promise<void> {
-    const users = this.app.mongo.db?.collection<User>('user');
-    if (users) {
-      if (await users.findOne({ username: (req.body as User).username })) {
-        res.status(400).send({ error: 'User already exist' });
-      } else {
-        const rv = await users?.insertOne(req.body as User);
-        res.send(rv);
-      }
+import { RouteShorthandOptions } from 'fastify';
+
+const userSchema: RouteShorthandOptions = {
+  schema: {
+    body: {
+      type: 'object',
+      required: ['username', 'password'],
+      properties: {
+        username: { type: 'string' },
+        password: { type: 'string' },
+      },
+    },
+  },
+};
+
+export async function AuthController(
+  app: FastifyInstance<
+    Server,
+    IncomingMessage,
+    ServerResponse<IncomingMessage>,
+    FastifyBaseLogger,
+    FastifyTypeProviderDefault
+  >,
+  opts: AuthControllerOpts,
+  done: (err?: Error) => void,
+): Promise<void> {
+  const users = app.mongo.db?.collection<User>('users');
+  const sessions = app.mongo.db?.collection<Session>('sessions');
+  const { publicKey, privateKey } = opts;
+  if (users && sessions) {
+    const count = await users.countDocuments();
+    if (count === 0) {
+      const password = crypto.randomBytes(12).toString('hex');
+      console.log(`
+      =======================================
+      | No users found
+      | Created one new
+      | Login: admin
+      | Password: ${password}
+      =======================================
+      `);
+      users.insertOne({
+        username: 'admin',
+        password: hashPassword(password),
+      });
     }
+    app.post('/register', userSchema, async function (req, res) {
+      if (opts.enableRegistration) {
+        const body = req.body as User;
+        if (users) {
+          if (await users.findOne({ username: body.username })) {
+            res.status(400).send({ error: 'User already exist' });
+          } else {
+            body.password = hashPassword(body.password);
+            const rv = await users.insertOne(body);
+            res.send(rv);
+          }
+        }
+      } else {
+        res.status(500).send({ message: 'Registration disabled by Administrator' });
+      }
+    });
+    app.post('/login', userSchema, async function (req, res) {
+      const body = req.body as User;
+      const { headers } = req;
+      const user = await users.findOne({ username: body.username });
+      if (user && comparePasswords(body.password, user.password)) {
+        const token = await JWT.sign(user.username, privateKey);
+        const refresh = crypto.randomBytes(32).toString('hex');
+        const rndKey = crypto.randomBytes(128).toString('hex');
+        const refreshSigned = crypto.createHmac('sha256', rndKey).update(refresh).digest().toString('base64url');
+        const session = await sessions.insertOne({
+          client: headers['user-agent'] ?? 'Unknown',
+          user: user._id,
+          token: `${rndKey}.${refresh}`,
+        });
+        // res
+        //   .setCookie('token', token, {
+        //     httpOnly: true,
+        //     path: '/',
+        //     maxAge: opts.jwtDuration, // 20 min
+        //   })
+        //   .setCookie('refresh', refreshSigned, {
+        //     httpOnly: true,
+        //     path: '/',
+        //     maxAge: opts.sessionDuration, // 1 day
+        //   })
+        //   .setCookie('sessid', session.insertedId.toHexString(), {
+        //     httpOnly: false,
+        //     path: '/',
+        //     maxAge: opts.sessionDuration, // 1 day
+        //   })
+        bakeCookies(res, token, refreshSigned, session.insertedId.toHexString()).send({
+          user: user.username,
+          session: session.insertedId,
+        });
+      } else {
+        res.status(404).send({ message: "User not found or password doesn't match" });
+      }
+    });
+    app.post('/refresh', async (req, res) => {
+      const { cookies, headers } = req;
+      const { sessid, refresh } = cookies;
+      if (!sessid) {
+        res.status(401).send({ message: 'Unauthorized, Session id isnt set' });
+        return;
+      }
+      if (!refresh) {
+        res.status(401).send({ message: 'Unauthorized, Refresh token not found' });
+        return;
+      }
+      const session = await sessions.findOne({ _id: new ObjectId(sessid) });
+      if (!session) {
+        res.status(403).send({ message: 'Forbidden, Session with supplied id not found' });
+        return;
+      }
+      const [key, rToken] = session.token.split('.');
+      const gsR = crypto.createHmac('sha256', key).update(rToken).digest().toString('base64url');
+      if (gsR !== refresh) {
+        res.status(403).send({ message: "Forbidden, session refresh token doesn't match supplied token" });
+        return;
+      }
+      const user = await users.findOne({ _id: session.user });
+      if (!user) {
+        res.status(404).send({ message: 'User not found' });
+        return;
+      }
+      const token = await JWT.sign(user.username, privateKey);
+      const newRefresh = crypto.randomBytes(32).toString('hex');
+      const rndKey = crypto.randomBytes(128).toString('hex');
+      const refreshSigned = crypto.createHmac('sha256', rndKey).update(newRefresh).digest().toString('base64url');
+      await sessions.findOneAndDelete({ _id: new ObjectId(sessid) });
+      const newSession = await sessions.insertOne({
+        client: headers['user-agent'] ?? 'Unknown',
+        user: user._id,
+        token: `${rndKey}.${newRefresh}`,
+      });
+      bakeCookies(res, token, refreshSigned, newSession.insertedId.toHexString()).send({
+        user: user.username,
+        session: newSession.insertedId,
+      });
+      // res
+      //   .setCookie('token', token, {
+      //     httpOnly: true,
+      //     domain: process.env.DOMAIN ?? 'localhost',
+      //     path: '/',
+      //     maxAge: durationToSeconds('2m'), // 20 min
+      //   })
+      //   .setCookie('refresh', refreshSigned, {
+      //     httpOnly: true,
+      //     domain: process.env.DOMAIN ?? 'localhost',
+      //     path: '/',
+      //     maxAge: durationToSeconds('1d'), // 1 day
+      //   })
+      //   .setCookie('sessid', newSession.insertedId.toHexString(), {
+      //     httpOnly: false,
+      //     domain: process.env.DOMAIN ?? 'localhost',
+      //     path: '/',
+      //     maxAge: durationToSeconds('1d'), // 1 day
+      //   })
+      //   .send({ user: user.username, session: newSession.insertedId });
+    });
+    app.get('/jwk', async (req, res) => {
+      res.send(await exportJWK(publicKey));
+    });
+
+    const bakeCookies = (res: FastifyReply, token: string, refresh: string, sessionId: string): FastifyReply => {
+      return res
+        .setCookie('token', token, {
+          httpOnly: true,
+          path: '/',
+          maxAge: opts.jwtDuration, // 20 min
+          sameSite: 'lax',
+        })
+        .setCookie('refresh', refresh, {
+          httpOnly: true,
+          path: '/',
+          maxAge: opts.sessionDuration, // 1 day
+          sameSite: 'lax',
+        })
+        .setCookie('sessid', sessionId, {
+          httpOnly: false,
+          path: '/',
+          maxAge: opts.sessionDuration, // 1 day
+          sameSite: 'lax',
+        });
+    };
+    done();
+  } else {
+    done(new Error('Cannot get user collection'));
   }
 }
