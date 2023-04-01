@@ -92,22 +92,6 @@ export async function AuthController(
           user: user._id,
           token: `${rndKey}.${refresh}`,
         });
-        // res
-        //   .setCookie('token', token, {
-        //     httpOnly: true,
-        //     path: '/',
-        //     maxAge: opts.jwtDuration, // 20 min
-        //   })
-        //   .setCookie('refresh', refreshSigned, {
-        //     httpOnly: true,
-        //     path: '/',
-        //     maxAge: opts.sessionDuration, // 1 day
-        //   })
-        //   .setCookie('sessid', session.insertedId.toHexString(), {
-        //     httpOnly: false,
-        //     path: '/',
-        //     maxAge: opts.sessionDuration, // 1 day
-        //   })
         bakeCookies(res, token, refreshSigned, session.insertedId.toHexString()).send({
           user: user.username,
           session: session.insertedId,
@@ -143,40 +127,24 @@ export async function AuthController(
         res.status(404).send({ message: 'User not found' });
         return;
       }
-      const token = await JWT.sign(user.username, privateKey);
-      const newRefresh = crypto.randomBytes(32).toString('hex');
-      const rndKey = crypto.randomBytes(128).toString('hex');
-      const refreshSigned = crypto.createHmac('sha256', rndKey).update(newRefresh).digest().toString('base64url');
-      await sessions.findOneAndDelete({ _id: new ObjectId(sessid) });
-      const newSession = await sessions.insertOne({
-        client: headers['user-agent'] ?? 'Unknown',
-        user: user._id,
-        token: `${rndKey}.${newRefresh}`,
-      });
-      bakeCookies(res, token, refreshSigned, newSession.insertedId.toHexString()).send({
-        user: user.username,
-        session: newSession.insertedId,
-      });
-      // res
-      //   .setCookie('token', token, {
-      //     httpOnly: true,
-      //     domain: process.env.DOMAIN ?? 'localhost',
-      //     path: '/',
-      //     maxAge: durationToSeconds('2m'), // 20 min
-      //   })
-      //   .setCookie('refresh', refreshSigned, {
-      //     httpOnly: true,
-      //     domain: process.env.DOMAIN ?? 'localhost',
-      //     path: '/',
-      //     maxAge: durationToSeconds('1d'), // 1 day
-      //   })
-      //   .setCookie('sessid', newSession.insertedId.toHexString(), {
-      //     httpOnly: false,
-      //     domain: process.env.DOMAIN ?? 'localhost',
-      //     path: '/',
-      //     maxAge: durationToSeconds('1d'), // 1 day
-      //   })
-      //   .send({ user: user.username, session: newSession.insertedId });
+      const result = await sessions.findOneAndDelete({ _id: new ObjectId(sessid) });
+      if (result.ok === 1) {
+        const token = await JWT.sign(user.username, privateKey);
+        const newRefresh = crypto.randomBytes(32).toString('hex');
+        const rndKey = crypto.randomBytes(128).toString('hex');
+        const refreshSigned = crypto.createHmac('sha256', rndKey).update(newRefresh).digest().toString('base64url');
+        const newSession = await sessions.insertOne({
+          client: headers['user-agent'] ?? 'Unknown',
+          user: user._id,
+          token: `${rndKey}.${newRefresh}`,
+        });
+        bakeCookies(res, token, refreshSigned, newSession.insertedId.toHexString()).send({
+          user: user.username,
+          session: newSession.insertedId,
+        });
+      } else {
+        res.send();
+      }
     });
     app.get('/jwk', async (req, res) => {
       res.send(await exportJWK(publicKey));
