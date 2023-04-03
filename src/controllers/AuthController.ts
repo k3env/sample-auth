@@ -158,21 +158,21 @@ export async function AuthController(
           path: '/',
           domain: opts.cookieDomain,
           maxAge: opts.jwtDuration, // 20 min
-          sameSite: 'lax',
+          sameSite: 'none',
         })
         .setCookie('refresh', refresh, {
           httpOnly: true,
           path: '/',
           domain: opts.cookieDomain,
           maxAge: opts.sessionDuration, // 1 day
-          sameSite: 'lax',
+          sameSite: 'none',
         })
         .setCookie('sessid', sessionId, {
           httpOnly: false,
           path: '/',
           domain: opts.cookieDomain,
           maxAge: opts.sessionDuration, // 1 day
-          sameSite: 'lax',
+          sameSite: 'none',
         });
     };
     done();
