@@ -14,13 +14,14 @@ export async function main(): Promise<void> {
   const app = fastify({ logger: true });
 
   const { pubKey, privKey } = await JWT.loadOrCreate();
-  const { APP_HOST, APP_PORT, MONGO_URI, ENABLE_REGISTRATION, JWT_DURATION, SESSION_DURATION } = process.env;
+  const { APP_HOST, APP_PORT, MONGO_URI, ENABLE_REGISTRATION, JWT_DURATION, SESSION_DURATION, DOMAIN } = process.env;
 
   if (!MONGO_URI) {
     console.error("MONGO_URI isn't set");
     return;
   }
 
+  const cookieDomain = DOMAIN ?? 'localhost';
   const appHost = APP_HOST ?? '127.0.0.1';
   const appPort = Number.parseInt(APP_PORT ?? '8000');
   const enableRegistration = JSON.parse(ENABLE_REGISTRATION ?? 'true');
@@ -36,6 +37,7 @@ export async function main(): Promise<void> {
     enableRegistration,
     jwtDuration,
     sessionDuration,
+    cookieDomain,
     prefix: '/api/v1/auth',
   });
   app.register(UserController, { publicKey: pubKey, prefix: '/api/v1/user' });

@@ -14,6 +14,7 @@ export type AuthControllerOpts = {
   enableRegistration: boolean;
   jwtDuration: number;
   sessionDuration: number;
+  cookieDomain: string;
 };
 
 import { RouteShorthandOptions } from 'fastify';
@@ -155,18 +156,21 @@ export async function AuthController(
         .setCookie('token', token, {
           httpOnly: true,
           path: '/',
+          domain: opts.cookieDomain,
           maxAge: opts.jwtDuration, // 20 min
           sameSite: 'lax',
         })
         .setCookie('refresh', refresh, {
           httpOnly: true,
           path: '/',
+          domain: opts.cookieDomain,
           maxAge: opts.sessionDuration, // 1 day
           sameSite: 'lax',
         })
         .setCookie('sessid', sessionId, {
           httpOnly: false,
           path: '/',
+          domain: opts.cookieDomain,
           maxAge: opts.sessionDuration, // 1 day
           sameSite: 'lax',
         });
