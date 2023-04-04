@@ -7,7 +7,8 @@
     "dev": "npx nodemon -e ts",
     "start": "node --loader ts-node/esm --inspect --experimental-specifier-resolution=node src/main.ts serve",
     "build": "npx tsc",
-    "bundle": "npx rollup dist/main.js --file dist/app.cjs --format cjs"
+    "bundle": "npx rollup dist/main.js --file dist/app.cjs --format cjs",
+    "generate:keys": "node --loader ts-node/esm genKeys.ts"
   },
   "author": "",
   "license": "ISC",
