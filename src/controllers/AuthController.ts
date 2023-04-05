@@ -51,12 +51,12 @@ export async function AuthController(
     if (count === 0) {
       const password = crypto.randomBytes(12).toString('hex');
       console.log(`
-      =======================================
+      |
       | No users found
       | Created one new
       | Login: admin
       | Password: ${password}
-      =======================================
+      |
       `);
       users.insertOne({
         username: 'admin',
