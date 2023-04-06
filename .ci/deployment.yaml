@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api
-  namespace: auth
+  namespace: '$.ns'
 spec:
   selector:
     matchLabels:
@@ -12,15 +12,22 @@ spec:
       labels:
         app: api
     spec:
+      volumes:
+        - name: secrets
+          secret:
+            secretName: api
       containers:
         - name: api
-          image: k3env/auth-api:latest
+          image: k3env/sample-auth:$.tag
           resources:
             limits:
               memory: '128Mi'
               cpu: '500m'
-          ports:
-            - containerPort: 3000
           envFrom:
             - configMapRef:
-                name: auth-api-env
+                name: api
+          volumeMounts:
+            - mountPath: /app/pki
+              name: secrets
+          ports:
+            - containerPort: 8000
