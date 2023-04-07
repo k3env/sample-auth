@@ -7,7 +7,7 @@ export class JWT {
     let pubKey: jose.KeyLike;
     if (!(existsSync('./pki/pub.jwk') && existsSync('./pki/key.jwk'))) {
       const keyPair = await jose.generateKeyPair('RS256');
-      mkdirSync('./pki');
+      mkdirSync('./pki', { recursive: true });
       writeFileSync('./pki/pub.jwk', JSON.stringify(await jose.exportJWK(keyPair.publicKey)));
       writeFileSync('./pki/key.jwk', JSON.stringify(await jose.exportJWK(keyPair.privateKey)));
       pubKey = keyPair.publicKey;
