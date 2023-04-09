@@ -154,25 +154,25 @@ export async function AuthController(
     const bakeCookies = (res: FastifyReply, token: string, refresh: string, sessionId: string): FastifyReply => {
       return res
         .setCookie('token', token, {
-          httpOnly: true,
+          httpOnly: false,
           path: '/',
           domain: opts.cookieDomain,
           maxAge: opts.jwtDuration, // 20 min
-          sameSite: 'none',
+          sameSite: 'lax',
         })
         .setCookie('refresh', refresh, {
           httpOnly: true,
           path: '/',
           domain: opts.cookieDomain,
           maxAge: opts.sessionDuration, // 1 day
-          sameSite: 'none',
+          sameSite: 'lax',
         })
         .setCookie('sessid', sessionId, {
           httpOnly: false,
           path: '/',
           domain: opts.cookieDomain,
           maxAge: opts.sessionDuration, // 1 day
-          sameSite: 'none',
+          sameSite: 'lax',
         });
     };
     done();
